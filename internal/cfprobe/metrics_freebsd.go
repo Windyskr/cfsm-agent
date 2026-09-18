@@ -65,20 +65,23 @@ func readMemoryStats() (MemoryStats, bool) {
 }
 
 func readNetBytes(ifaces string) NetBytes {
+	return sumNetInterfaces(readNetInterfaces(ifaces))
+}
+
+func readNetInterfaces(ifaces string) map[string]NetBytes {
 	wanted := splitInterfaceSet(ifaces)
 	counters, err := gopsutilNet.IOCounters(true)
 	if err != nil {
-		return NetBytes{}
+		return map[string]NetBytes{}
 	}
-	var total NetBytes
+	interfaces := map[string]NetBytes{}
 	for _, counter := range counters {
 		if !shouldIncludeNetInterface(counter.Name, wanted) {
 			continue
 		}
-		total.RX += counter.BytesRecv
-		total.TX += counter.BytesSent
+		interfaces[counter.Name] = NetBytes{RX: counter.BytesRecv, TX: counter.BytesSent}
 	}
-	return total
+	return interfaces
 }
 
 func readDiskIOCounters(_ []DiskDeviceRef) DiskIOCounters {

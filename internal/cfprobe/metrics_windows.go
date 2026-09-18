@@ -59,10 +59,14 @@ func windowsPowerShellOutput(script string) string {
 }
 
 func readNetBytes(ifaces string) NetBytes {
+	return sumNetInterfaces(readNetInterfaces(ifaces))
+}
+
+func readNetInterfaces(ifaces string) map[string]NetBytes {
 	script := "Get-NetAdapterStatistics | ForEach-Object { \"$($_.Name),$($_.ReceivedBytes),$($_.SentBytes)\" }"
 	out := windowsPowerShellOutput(script)
 	wanted := splitInterfaceSet(ifaces)
-	var total NetBytes
+	interfaces := map[string]NetBytes{}
 	for _, line := range strings.Split(out, "\n") {
 		parts := strings.Split(strings.TrimSpace(line), ",")
 		if len(parts) != 3 {
@@ -74,10 +78,9 @@ func readNetBytes(ifaces string) NetBytes {
 		}
 		rx, _ := strconv.ParseUint(strings.TrimSpace(parts[1]), 10, 64)
 		tx, _ := strconv.ParseUint(strings.TrimSpace(parts[2]), 10, 64)
-		total.RX += rx
-		total.TX += tx
+		interfaces[name] = NetBytes{RX: rx, TX: tx}
 	}
-	return total
+	return interfaces
 }
 
 func readDiskIOCounters(_ []DiskDeviceRef) DiskIOCounters {

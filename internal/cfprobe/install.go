@@ -125,6 +125,8 @@ func mergeExplicitInstallConfig(dst *Config, src Config, explicit map[string]boo
 			dst.Node4 = src.Node4
 		case "interface":
 			dst.Interface = src.Interface
+		case "multi_interface":
+			dst.MultiInterface = src.MultiInterface
 		case "reset_day":
 			dst.ResetDay = src.ResetDay
 		case "connection_mode":

@@ -37,6 +37,10 @@ func readNetBytes(_ string) NetBytes {
 	return NetBytes{}
 }
 
+func readNetInterfaces(_ string) map[string]NetBytes {
+	return map[string]NetBytes{}
+}
+
 func readDiskIOCounters(_ []DiskDeviceRef) DiskIOCounters {
 	return DiskIOCounters{}
 }

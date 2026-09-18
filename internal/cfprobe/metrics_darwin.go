@@ -305,9 +305,13 @@ func stringFromAny(v any) string {
 }
 
 func readNetBytes(ifaces string) NetBytes {
+	return sumNetInterfaces(readNetInterfaces(ifaces))
+}
+
+func readNetInterfaces(ifaces string) map[string]NetBytes {
 	wanted := splitInterfaceSet(ifaces)
 	seen := map[string]bool{}
-	var total NetBytes
+	interfaces := map[string]NetBytes{}
 	out := commandOutput("netstat", "-ibn")
 	for _, line := range strings.Split(out, "\n") {
 		fields := strings.Fields(line)
@@ -327,11 +331,10 @@ func readNetBytes(ifaces string) NetBytes {
 		}
 		rx, _ := strconv.ParseUint(fields[6], 10, 64)
 		tx, _ := strconv.ParseUint(fields[9], 10, 64)
-		total.RX += rx
-		total.TX += tx
+		interfaces[name] = NetBytes{RX: rx, TX: tx}
 		seen[name] = true
 	}
-	return total
+	return interfaces
 }
 
 func readDiskIOCounters(_ []DiskDeviceRef) DiskIOCounters {

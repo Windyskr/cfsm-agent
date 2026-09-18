@@ -101,8 +101,12 @@ func readMemoryStats() (MemoryStats, bool) {
 }
 
 func readNetBytes(ifaces string) NetBytes {
+	return sumNetInterfaces(readNetInterfaces(ifaces))
+}
+
+func readNetInterfaces(ifaces string) map[string]NetBytes {
 	wanted := splitInterfaceSet(ifaces)
-	var total NetBytes
+	interfaces := map[string]NetBytes{}
 	_ = scanFile("/proc/net/dev", func(line string) {
 		if !strings.Contains(line, ":") {
 			return
@@ -118,10 +122,9 @@ func readNetBytes(ifaces string) NetBytes {
 		}
 		rx, _ := strconv.ParseUint(fields[0], 10, 64)
 		tx, _ := strconv.ParseUint(fields[8], 10, 64)
-		total.RX += rx
-		total.TX += tx
+		interfaces[name] = NetBytes{RX: rx, TX: tx}
 	})
-	return total
+	return interfaces
 }
 
 func readMemInfo() map[string]uint64 {

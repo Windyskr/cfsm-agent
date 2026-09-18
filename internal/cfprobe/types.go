@@ -33,6 +33,7 @@ type Config struct {
 	Node3           string
 	Node4           string
 	Interface       string
+	MultiInterface  bool
 	ResetDay        int
 	ConnectionMode  string
 	PingMode        string
@@ -92,49 +93,50 @@ type ProbeSnapshot struct {
 }
 
 type Metrics struct {
-	CPU          string
-	RAMTotal     string
-	RAMUsed      string
-	SwapTotal    string
-	SwapUsed     string
-	DiskTotal    string
-	DiskUsed     string
-	Disk         DiskIOStats
-	LoadAvg      string
-	BootTime     string
-	NetRX        string
-	NetTX        string
-	NetRXMonthly string
-	NetTXMonthly string
-	NetInSpeed   string
-	NetOutSpeed  string
-	OS           string
-	Arch         string
-	Kernel       string
-	CPUInfo      string
-	CPUCores     string
-	GPUInfo      any
-	Processes    string
-	TCPConn      string
-	UDPConn      string
-	IPv4         string
-	IPv6         string
-	PingCT       any
-	PingCU       any
-	PingCM       any
-	PingBD       any
-	PingNode1    any
-	PingNode2    any
-	PingNode3    any
-	PingNode4    any
-	LossCT       any
-	LossCU       any
-	LossCM       any
-	LossBD       any
-	LossNode1    any
-	LossNode2    any
-	LossNode3    any
-	LossNode4    any
+	CPU               string
+	RAMTotal          string
+	RAMUsed           string
+	SwapTotal         string
+	SwapUsed          string
+	DiskTotal         string
+	DiskUsed          string
+	Disk              DiskIOStats
+	LoadAvg           string
+	BootTime          string
+	NetRX             string
+	NetTX             string
+	NetRXMonthly      string
+	NetTXMonthly      string
+	NetInSpeed        string
+	NetOutSpeed       string
+	NetworkInterfaces map[string]NetworkInterfaceMetrics
+	OS                string
+	Arch              string
+	Kernel            string
+	CPUInfo           string
+	CPUCores          string
+	GPUInfo           any
+	Processes         string
+	TCPConn           string
+	UDPConn           string
+	IPv4              string
+	IPv6              string
+	PingCT            any
+	PingCU            any
+	PingCM            any
+	PingBD            any
+	PingNode1         any
+	PingNode2         any
+	PingNode3         any
+	PingNode4         any
+	LossCT            any
+	LossCU            any
+	LossCM            any
+	LossBD            any
+	LossNode1         any
+	LossNode2         any
+	LossNode3         any
+	LossNode4         any
 }
 
 type BasicStats struct {
@@ -168,6 +170,13 @@ type MemoryStats struct {
 type NetBytes struct {
 	RX uint64
 	TX uint64
+}
+
+type NetworkInterfaceMetrics struct {
+	NetRX       string `json:"net_rx"`
+	NetTX       string `json:"net_tx"`
+	NetInSpeed  string `json:"net_in_speed"`
+	NetOutSpeed string `json:"net_out_speed"`
 }
 
 type DiskDeviceRef struct {

@@ -117,6 +117,46 @@ func isExcludedNetInterface(name string) bool {
 	return false
 }
 
+func sumNetInterfaces(values map[string]NetBytes) NetBytes {
+	var total NetBytes
+	for _, value := range values {
+		total.RX += value.RX
+		total.TX += value.TX
+	}
+	return total
+}
+
+func buildNetworkInterfaceMetrics(current, previous map[string]NetBytes, elapsedSeconds float64) map[string]NetworkInterfaceMetrics {
+	if len(current) == 0 {
+		return nil
+	}
+	metrics := make(map[string]NetworkInterfaceMetrics, len(current))
+	for name, now := range current {
+		before := previous[name]
+		rxDelta := uint64(0)
+		txDelta := uint64(0)
+		if now.RX >= before.RX {
+			rxDelta = now.RX - before.RX
+		}
+		if now.TX >= before.TX {
+			txDelta = now.TX - before.TX
+		}
+		rxSpeed := uint64(0)
+		txSpeed := uint64(0)
+		if elapsedSeconds > 0 {
+			rxSpeed = uint64(float64(rxDelta) / elapsedSeconds)
+			txSpeed = uint64(float64(txDelta) / elapsedSeconds)
+		}
+		metrics[name] = NetworkInterfaceMetrics{
+			NetRX:       uintString(now.RX),
+			NetTX:       uintString(now.TX),
+			NetInSpeed:  uintString(rxSpeed),
+			NetOutSpeed: uintString(txSpeed),
+		}
+	}
+	return metrics
+}
+
 func readSmallFile(path string) string {
 	data, err := os.ReadFile(path)
 	if err != nil {
@@ -188,7 +228,7 @@ func parseNvidiaSMI(out string) []gpuMetric {
 }
 
 func metricsToMap(m Metrics) map[string]any {
-	return map[string]any{
+	metrics := map[string]any{
 		"cpu":            m.CPU,
 		"ram_total":      m.RAMTotal,
 		"ram_used":       m.RAMUsed,
@@ -233,6 +273,10 @@ func metricsToMap(m Metrics) map[string]any {
 		"loss_node_3":    m.LossNode3,
 		"loss_node_4":    m.LossNode4,
 	}
+	if len(m.NetworkInterfaces) > 0 {
+		metrics["network_interfaces"] = m.NetworkInterfaces
+	}
+	return metrics
 }
 
 func diskIOStatsFromCounters(prev, current DiskIOCounters, elapsedSeconds float64) DiskIOStats {

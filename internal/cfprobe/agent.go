@@ -27,19 +27,20 @@ type Agent struct {
 	version string
 	ctx     context.Context
 
-	mu         sync.RWMutex
-	probes     ProbeSnapshot
-	basic      BasicStats
-	basicAt    time.Time
-	fullAt     time.Time
-	prevNet    NetBytes
-	prevTime   time.Time
-	prevDisk   DiskIOCounters
-	prevDiskAt time.Time
-	diskIO     DiskIOStats
-	monthlyRX  uint64
-	monthlyTX  uint64
-	clock      calibratedClock
+	mu                sync.RWMutex
+	probes            ProbeSnapshot
+	basic             BasicStats
+	basicAt           time.Time
+	fullAt            time.Time
+	prevNet           NetBytes
+	prevNetInterfaces map[string]NetBytes
+	prevTime          time.Time
+	prevDisk          DiskIOCounters
+	prevDiskAt        time.Time
+	diskIO            DiskIOStats
+	monthlyRX         uint64
+	monthlyTX         uint64
+	clock             calibratedClock
 
 	samples                  []metricSample
 	lastSample               time.Time
@@ -176,23 +177,24 @@ func Run(configFile string, debug bool, version string) error {
 	defer stop()
 
 	a := &Agent{
-		cfg:          cfg,
-		paths:        paths,
-		log:          newLogger(debug),
-		version:      version,
-		ctx:          ctx,
-		prevNet:      readNetBytes(cfg.Interface),
-		prevTime:     time.Now(),
-		wake:         make(chan struct{}, 1),
-		remoteConfig: make(chan remoteConfigRequest, 4),
+		cfg:               cfg,
+		paths:             paths,
+		log:               newLogger(debug),
+		version:           version,
+		ctx:               ctx,
+		prevNet:           readNetBytes(cfg.Interface),
+		prevNetInterfaces: readNetInterfaces(cfg.Interface),
+		prevTime:          time.Now(),
+		wake:              make(chan struct{}, 1),
+		remoteConfig:      make(chan remoteConfigRequest, 4),
 	}
 	a.reporter = newReportTransport(a)
 	a.basic = collectBasicStats()
 	a.basicAt = time.Now()
 
 	a.log.info("CF-Server-Monitor Go Probe started version=%s platform=%s config=%s", version, platformName(), paths.ConfigFile)
-	a.log.debugf("config id=%s url=%s report_interval=%ds collect_interval=%ds reset_day=%d connection_mode=%s ping_mode=%s interface=%s auto_update=%v",
-		cfg.ServerID, cfg.WorkerURL, cfg.ReportInterval, cfg.CollectInterval, cfg.ResetDay, cfg.ConnectionMode, cfg.PingMode, firstNonEmpty(cfg.Interface, "auto"), cfg.AutoUpdate)
+	a.log.debugf("config id=%s url=%s report_interval=%ds collect_interval=%ds reset_day=%d connection_mode=%s ping_mode=%s interface=%s multi_interface=%v auto_update=%v",
+		cfg.ServerID, cfg.WorkerURL, cfg.ReportInterval, cfg.CollectInterval, cfg.ResetDay, cfg.ConnectionMode, cfg.PingMode, firstNonEmpty(cfg.Interface, "auto"), cfg.MultiInterface, cfg.AutoUpdate)
 
 	go a.networkWorker(ctx)
 	if a.usesWSS() {
@@ -431,7 +433,14 @@ func (a *Agent) tick() {
 	} else {
 		a.refreshRealtimeBasicStats()
 	}
+	netInterfaces := map[string]NetBytes{}
+	if cfg.MultiInterface {
+		netInterfaces = readNetInterfaces(cfg.Interface)
+	}
 	netNow := readNetBytes(cfg.Interface)
+	if cfg.MultiInterface {
+		netNow = sumNetInterfaces(netInterfaces)
+	}
 	dt := now.Sub(a.prevTime).Seconds()
 	if dt <= 0 {
 		dt = float64(cfg.ReportInterval)
@@ -447,6 +456,10 @@ func (a *Agent) tick() {
 	rxSpeed := uint64(float64(rxDelta) / dt)
 	txSpeed := uint64(float64(txDelta) / dt)
 	a.prevNet = netNow
+	interfaceMetrics := buildNetworkInterfaceMetrics(netInterfaces, a.prevNetInterfaces, dt)
+	if cfg.MultiInterface {
+		a.prevNetInterfaces = netInterfaces
+	}
 	a.prevTime = now
 
 	cpu := "0.00"
@@ -459,7 +472,7 @@ func (a *Agent) tick() {
 		a.diskIO = a.sampleDiskIO(now)
 		a.fullAt = now
 	}
-	m := a.buildMetrics(cfg, cpu, netNow, rxSpeed, txSpeed, a.monthlyRX, a.monthlyTX, a.diskIO)
+	m := a.buildMetrics(cfg, cpu, netNow, rxSpeed, txSpeed, a.monthlyRX, a.monthlyTX, interfaceMetrics, a.diskIO)
 	if shouldSample {
 		a.samples = append(a.samples, metricSample{
 			at:      now,
@@ -505,55 +518,56 @@ func (a *Agent) sampleDiskIO(now time.Time) DiskIOStats {
 	return stats
 }
 
-func (a *Agent) buildMetrics(cfg Config, cpu string, netNow NetBytes, rxSpeed, txSpeed, rxMonthly, txMonthly uint64, diskIO DiskIOStats) Metrics {
+func (a *Agent) buildMetrics(cfg Config, cpu string, netNow NetBytes, rxSpeed, txSpeed, rxMonthly, txMonthly uint64, networkInterfaces map[string]NetworkInterfaceMetrics, diskIO DiskIOStats) Metrics {
 	a.mu.RLock()
 	probes := a.probes
 	a.mu.RUnlock()
 	b := a.basic
 	return Metrics{
-		CPU:          cpu,
-		RAMTotal:     uintString(b.MemTotalMB),
-		RAMUsed:      uintString(b.MemUsedMB),
-		SwapTotal:    uintString(b.SwapTotalMB),
-		SwapUsed:     uintString(b.SwapUsedMB),
-		DiskTotal:    uintString(b.DiskTotalMB),
-		DiskUsed:     uintString(b.DiskUsedMB),
-		Disk:         diskIO,
-		LoadAvg:      firstNonEmpty(b.LoadAvg, "0 0 0"),
-		BootTime:     strconv.FormatInt(b.BootTimeMS, 10),
-		NetRX:        uintString(netNow.RX),
-		NetTX:        uintString(netNow.TX),
-		NetRXMonthly: uintString(rxMonthly),
-		NetTXMonthly: uintString(txMonthly),
-		NetInSpeed:   uintString(rxSpeed),
-		NetOutSpeed:  uintString(txSpeed),
-		OS:           firstNonEmpty(b.OSName, runtime.GOOS),
-		Arch:         firstNonEmpty(b.Arch, fallbackArch()),
-		Kernel:       b.Kernel,
-		CPUInfo:      firstNonEmpty(b.CPUInfo, fallbackArch()),
-		CPUCores:     intString(b.CPUCores),
-		GPUInfo:      b.GPUInfo,
-		Processes:    intString(b.Processes),
-		TCPConn:      intString(b.TCPConn),
-		UDPConn:      intString(b.UDPConn),
-		IPv4:         firstNonEmpty(probes.IPv4, "0"),
-		IPv6:         firstNonEmpty(probes.IPv6, "0"),
-		PingCT:       probeRTTValue(cfg.CTNode, probes.CT),
-		PingCU:       probeRTTValue(cfg.CUNode, probes.CU),
-		PingCM:       probeRTTValue(cfg.CMNode, probes.CM),
-		PingBD:       probeRTTValue(cfg.BDNode, probes.BD),
-		PingNode1:    probeRTTValue(cfg.Node1, probes.Node1),
-		PingNode2:    probeRTTValue(cfg.Node2, probes.Node2),
-		PingNode3:    probeRTTValue(cfg.Node3, probes.Node3),
-		PingNode4:    probeRTTValue(cfg.Node4, probes.Node4),
-		LossCT:       probeLossValue(cfg.CTNode, probes.CT),
-		LossCU:       probeLossValue(cfg.CUNode, probes.CU),
-		LossCM:       probeLossValue(cfg.CMNode, probes.CM),
-		LossBD:       probeLossValue(cfg.BDNode, probes.BD),
-		LossNode1:    probeLossValue(cfg.Node1, probes.Node1),
-		LossNode2:    probeLossValue(cfg.Node2, probes.Node2),
-		LossNode3:    probeLossValue(cfg.Node3, probes.Node3),
-		LossNode4:    probeLossValue(cfg.Node4, probes.Node4),
+		CPU:               cpu,
+		RAMTotal:          uintString(b.MemTotalMB),
+		RAMUsed:           uintString(b.MemUsedMB),
+		SwapTotal:         uintString(b.SwapTotalMB),
+		SwapUsed:          uintString(b.SwapUsedMB),
+		DiskTotal:         uintString(b.DiskTotalMB),
+		DiskUsed:          uintString(b.DiskUsedMB),
+		Disk:              diskIO,
+		LoadAvg:           firstNonEmpty(b.LoadAvg, "0 0 0"),
+		BootTime:          strconv.FormatInt(b.BootTimeMS, 10),
+		NetRX:             uintString(netNow.RX),
+		NetTX:             uintString(netNow.TX),
+		NetRXMonthly:      uintString(rxMonthly),
+		NetTXMonthly:      uintString(txMonthly),
+		NetInSpeed:        uintString(rxSpeed),
+		NetOutSpeed:       uintString(txSpeed),
+		NetworkInterfaces: networkInterfaces,
+		OS:                firstNonEmpty(b.OSName, runtime.GOOS),
+		Arch:              firstNonEmpty(b.Arch, fallbackArch()),
+		Kernel:            b.Kernel,
+		CPUInfo:           firstNonEmpty(b.CPUInfo, fallbackArch()),
+		CPUCores:          intString(b.CPUCores),
+		GPUInfo:           b.GPUInfo,
+		Processes:         intString(b.Processes),
+		TCPConn:           intString(b.TCPConn),
+		UDPConn:           intString(b.UDPConn),
+		IPv4:              firstNonEmpty(probes.IPv4, "0"),
+		IPv6:              firstNonEmpty(probes.IPv6, "0"),
+		PingCT:            probeRTTValue(cfg.CTNode, probes.CT),
+		PingCU:            probeRTTValue(cfg.CUNode, probes.CU),
+		PingCM:            probeRTTValue(cfg.CMNode, probes.CM),
+		PingBD:            probeRTTValue(cfg.BDNode, probes.BD),
+		PingNode1:         probeRTTValue(cfg.Node1, probes.Node1),
+		PingNode2:         probeRTTValue(cfg.Node2, probes.Node2),
+		PingNode3:         probeRTTValue(cfg.Node3, probes.Node3),
+		PingNode4:         probeRTTValue(cfg.Node4, probes.Node4),
+		LossCT:            probeLossValue(cfg.CTNode, probes.CT),
+		LossCU:            probeLossValue(cfg.CUNode, probes.CU),
+		LossCM:            probeLossValue(cfg.CMNode, probes.CM),
+		LossBD:            probeLossValue(cfg.BDNode, probes.BD),
+		LossNode1:         probeLossValue(cfg.Node1, probes.Node1),
+		LossNode2:         probeLossValue(cfg.Node2, probes.Node2),
+		LossNode3:         probeLossValue(cfg.Node3, probes.Node3),
+		LossNode4:         probeLossValue(cfg.Node4, probes.Node4),
 	}
 }
 
@@ -918,6 +932,7 @@ func (a *Agent) applyRemoteConfigWithOptions(body []byte, headers http.Header, a
 		"node_3":              true,
 		"node_4":              true,
 		"interface":           true,
+		"multi_interface":     true,
 		"connection_mode":     true,
 		"ping_mode":           true,
 		"rx_correction":       true,
@@ -933,7 +948,7 @@ func (a *Agent) applyRemoteConfigWithOptions(body []byte, headers http.Header, a
 	if update != "" && update != "0" && update != "1" {
 		return fmt.Errorf("invalid update %s", update)
 	}
-	hasConfig := values.Has("collect_interval") || values.Has("report_interval") || values.Has("wss_report_interval") || values.Has("reset_day") || values.Has("schema_version") || values.Has("interface") || values.Has("connection_mode") || values.Has("ping_mode") || values.Has("node_1") || values.Has("node_2") || values.Has("node_3") || values.Has("node_4")
+	hasConfig := values.Has("collect_interval") || values.Has("report_interval") || values.Has("wss_report_interval") || values.Has("reset_day") || values.Has("schema_version") || values.Has("interface") || values.Has("multi_interface") || values.Has("connection_mode") || values.Has("ping_mode") || values.Has("node_1") || values.Has("node_2") || values.Has("node_3") || values.Has("node_4")
 	hasCorrection := values.Has("rx_correction") || values.Has("tx_correction")
 	cfg := a.configSnapshot()
 	if !hasConfig {
@@ -993,6 +1008,10 @@ func (a *Agent) applyRemoteConfigWithOptions(body []byte, headers http.Header, a
 	if err != nil {
 		return err
 	}
+	multiInterface, err := normalizeBinaryValue(values.Get("multi_interface"), cfg.MultiInterface)
+	if err != nil {
+		return fmt.Errorf("invalid multi_interface: %w", err)
+	}
 	effectiveCollect := collect
 	if connectionMode == connectionModeAuto && (collect == 0 || collect > wssReport) {
 		effectiveCollect = wssReport
@@ -1001,7 +1020,7 @@ func (a *Agent) applyRemoteConfigWithOptions(body []byte, headers http.Header, a
 	if hasRemoteMD5 {
 		shouldApply = newMD5 != cfg.ConfigMD5
 	} else {
-		shouldApply = remoteConfigDiffers(cfg, values, effectiveCollect, report, reset, iface, connectionMode, pingMode)
+		shouldApply = remoteConfigDiffers(cfg, values, effectiveCollect, report, reset, iface, multiInterface, connectionMode, pingMode)
 	}
 	if shouldApply {
 		nextCfg := cfg
@@ -1017,6 +1036,7 @@ func (a *Agent) applyRemoteConfigWithOptions(body []byte, headers http.Header, a
 		nextCfg.Node3 = values.Get("node_3")
 		nextCfg.Node4 = values.Get("node_4")
 		nextCfg.Interface = iface
+		nextCfg.MultiInterface = multiInterface
 		nextCfg.ConnectionMode = connectionMode
 		nextCfg.PingMode = pingMode
 		if hasRemoteMD5 {
@@ -1028,6 +1048,7 @@ func (a *Agent) applyRemoteConfigWithOptions(body []byte, headers http.Header, a
 		a.setConfig(nextCfg)
 		now := time.Now()
 		a.prevNet = readNetBytes(nextCfg.Interface)
+		a.prevNetInterfaces = readNetInterfaces(nextCfg.Interface)
 		a.prevTime = now
 		a.prevDisk = DiskIOCounters{}
 		a.prevDiskAt = time.Time{}
@@ -1047,7 +1068,7 @@ func (a *Agent) applyRemoteConfigWithOptions(body []byte, headers http.Header, a
 		}
 		a.syncReportTransport()
 		a.wakeTick()
-		a.log.info("dynamic configuration applied md5=%s connection_mode=%s ping_mode=%s interface=%s", firstNonEmpty(nextCfg.ConfigMD5, "none"), nextCfg.ConnectionMode, nextCfg.PingMode, firstNonEmpty(iface, "auto"))
+		a.log.info("dynamic configuration applied md5=%s connection_mode=%s ping_mode=%s interface=%s multi_interface=%v", firstNonEmpty(nextCfg.ConfigMD5, "none"), nextCfg.ConnectionMode, nextCfg.PingMode, firstNonEmpty(iface, "auto"), nextCfg.MultiInterface)
 		cfg = nextCfg
 	}
 	if hasCorrection {
@@ -1082,7 +1103,7 @@ func (a *Agent) syncReportTransport() {
 	}
 }
 
-func remoteConfigDiffers(cfg Config, values url.Values, collect, report, reset int, iface, connectionMode, pingMode string) bool {
+func remoteConfigDiffers(cfg Config, values url.Values, collect, report, reset int, iface string, multiInterface bool, connectionMode, pingMode string) bool {
 	return cfg.CollectInterval != collect ||
 		cfg.ReportInterval != report ||
 		cfg.ResetDay != reset ||
@@ -1095,6 +1116,7 @@ func remoteConfigDiffers(cfg Config, values url.Values, collect, report, reset i
 		cfg.Node3 != values.Get("node_3") ||
 		cfg.Node4 != values.Get("node_4") ||
 		cfg.Interface != iface ||
+		cfg.MultiInterface != multiInterface ||
 		cfg.ConnectionMode != connectionMode ||
 		cfg.PingMode != pingMode
 }

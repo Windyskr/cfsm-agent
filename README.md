@@ -93,6 +93,7 @@ curl -fsSL https://raw.githubusercontent.com/huilang-me/cfsm-agent/main/install.
 | `-cm=HOST` | 移动测试节点，可写 `host` 或 `host:port` | 空 |
 | `-bgp=HOST` | BGP 节点测试节点，可写 `host` 或 `host:port` | 空 |
 | `-interface=IFACES` | 指定统计网卡，多个用英文逗号分隔 | 自动汇总 |
+| `-multi_interface=0\|1` | 上报逐网卡累计流量和实时速度 | `0` |
 | `-reset_day=N` | 每月流量重置日，`1-31`；`0` 表示不重置 | `1` |
 | `-connection_mode=auto\|http` | 连接模式；`auto` 优先 WSS 实时上报并在不可用时 POST 兜底，`http` 仅按上报间隔 POST | `auto` |
 | `-ping_mode=tcp\|icmp` | Ping 探测模式；`tcp` 使用 TCP 连接探测，`icmp` 使用 ICMP 探测；两者均每 20 秒采样一次并按 2 分钟窗口聚合 | `tcp` |
@@ -384,6 +385,7 @@ Agent 只使用 Worker 成功 HTTP 响应里的 `Date` 头做时间校准，包�
 | `net_tx_monthly` | string | bytes | 当前统计周期内累计上行流量 |
 | `net_in_speed` | string | bytes/s | 上报周期内平均下行速度 |
 | `net_out_speed` | string | bytes/s | 上报周期内平均上行速度 |
+| `network_interfaces` | object | 可选 | `multi_interface=1` 时的逐网卡指标；每张网卡包含 `net_rx`、`net_tx`、`net_in_speed`、`net_out_speed` |
 | `os` | string | - | 操作系统名称 |
 | `arch` | string | - | CPU 架构 |
 | `kernel_version` | string | - | 内核或系统版本 |

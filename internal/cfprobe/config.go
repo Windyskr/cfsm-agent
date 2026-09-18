@@ -136,6 +136,7 @@ func readConfig(path string) (Config, error) {
 	cfg.Node3 = values["NODE_3"]
 	cfg.Node4 = values["NODE_4"]
 	cfg.Interface, _ = normalizeInterfaceList(values["INTERFACE"])
+	cfg.MultiInterface, _ = normalizeBinaryValue(values["MULTI_INTERFACE"], cfg.MultiInterface)
 	cfg.ResetDay = parseIntDefault(values["RESET_DAY"], cfg.ResetDay)
 	cfg.ConnectionMode, _ = normalizeConnectionMode(values["CONNECTION_MODE"])
 	cfg.PingMode, _ = normalizePingMode(values["PING_MODE"])
@@ -172,6 +173,11 @@ func writeConfig(path string, cfg Config) error {
 	writeKV("NODE_3", cfg.Node3)
 	writeKV("NODE_4", cfg.Node4)
 	writeKV("INTERFACE", cfg.Interface)
+	if cfg.MultiInterface {
+		writeKV("MULTI_INTERFACE", "1")
+	} else {
+		writeKV("MULTI_INTERFACE", "0")
+	}
 	writeKV("RESET_DAY", strconv.Itoa(cfg.ResetDay))
 	writeKV("CONNECTION_MODE", cfg.ConnectionMode)
 	writeKV("PING_MODE", cfg.PingMode)

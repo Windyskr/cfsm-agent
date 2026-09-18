@@ -73,6 +73,9 @@ func parseInstallOptions(args []string) (InstallOptions, error) {
 	fs.StringVar(&opts.Interface, "interface", "", "")
 	fs.StringVar(&opts.Interface, "interfaces", "", "")
 	fs.StringVar(&opts.Interface, "iface", "", "")
+	var multiInterface string
+	fs.StringVar(&multiInterface, "multi_interface", "", "")
+	fs.StringVar(&multiInterface, "multi-interface", "", "")
 	fs.IntVar(&opts.ResetDay, "reset_day", 1, "")
 	fs.StringVar(&opts.ConnectionMode, "connection_mode", connectionModeAuto, "")
 	fs.StringVar(&opts.ConnectionMode, "connection-mode", connectionModeAuto, "")
@@ -105,6 +108,10 @@ func parseInstallOptions(args []string) (InstallOptions, error) {
 	if err != nil {
 		return opts, fmt.Errorf("debug 参数非法: %w", err)
 	}
+	opts.MultiInterface, err = normalizeBinaryValue(multiInterface, false)
+	if err != nil {
+		return opts, fmt.Errorf("multi_interface 参数非法: %w", err)
+	}
 	opts.Interface, err = normalizeInterfaceList(opts.Interface)
 	if err != nil {
 		return opts, err
@@ -128,6 +135,8 @@ func canonicalInstallFlag(name string) string {
 		return "collect_interval"
 	case "interfaces", "iface":
 		return "interface"
+	case "multi_interface":
+		return "multi_interface"
 	case "connection-mode":
 		return "connection_mode"
 	case "ping-mode":
@@ -174,6 +183,7 @@ func printUsage(w io.Writer) {
 	fmt.Fprintln(w, "  -collect_interval=N  采样间隔(秒)，默认0")
 	fmt.Fprintln(w, "  -ct/-cu/-cm/-bd=HOST 自定义测试节点，可写 host 或 host:port")
 	fmt.Fprintln(w, "  -interface=IFACES    指定网卡，多个用英文逗号分隔")
+	fmt.Fprintln(w, "  -multi_interface=0|1 上报逐网卡累计流量和实时速度，默认0")
 	fmt.Fprintln(w, "  -reset_day=N         流量重置日(1-31, 0=不重置)，默认1")
 	fmt.Fprintln(w, "  -connection_mode=MODE 连接模式 auto|http，默认auto")
 	fmt.Fprintln(w, "  -ping_mode=MODE      Ping 模式 tcp|icmp，默认tcp")
