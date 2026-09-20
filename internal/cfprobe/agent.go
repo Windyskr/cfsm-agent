@@ -40,6 +40,7 @@ type Agent struct {
 	diskIO            DiskIOStats
 	monthlyRX         uint64
 	monthlyTX         uint64
+	monthlyInterfaces map[string]NetBytes
 	clock             calibratedClock
 
 	samples                  []metricSample
@@ -434,7 +435,6 @@ func (a *Agent) tick() {
 		a.refreshRealtimeBasicStats()
 	}
 	netInterfaces := map[string]NetBytes{}
-	monthlyInterfaces := map[string]NetBytes{}
 	if cfg.MultiInterface {
 		netInterfaces = readNetInterfaces(cfg.Interface)
 	}
@@ -468,12 +468,12 @@ func (a *Agent) tick() {
 	if fullDue {
 		a.monthlyRX, a.monthlyTX = calcMonthlyTraffic(a.paths.TrafficFile, netNow, cfg.ResetDay, cfg.Interface)
 		if cfg.MultiInterface {
-			monthlyInterfaces = calcMonthlyTrafficByInterface(a.paths.TrafficFile, netInterfaces, cfg.ResetDay)
+			a.monthlyInterfaces = calcMonthlyTrafficByInterface(a.paths.TrafficFile, netInterfaces, cfg.ResetDay)
 		}
 		a.diskIO = a.sampleDiskIO(now)
 		a.fullAt = now
 	}
-	interfaceMetrics := buildNetworkInterfaceMetrics(netInterfaces, previousNetInterfaces, monthlyInterfaces, dt)
+	interfaceMetrics := buildNetworkInterfaceMetrics(netInterfaces, previousNetInterfaces, a.monthlyInterfaces, dt)
 	if cfg.MultiInterface {
 		a.prevNetInterfaces = netInterfaces
 	}
@@ -1060,6 +1060,7 @@ func (a *Agent) applyRemoteConfigWithOptions(body []byte, headers http.Header, a
 		a.diskIO = DiskIOStats{}
 		a.monthlyRX = 0
 		a.monthlyTX = 0
+		a.monthlyInterfaces = nil
 		a.fullAt = time.Time{}
 		a.samples = nil
 		a.lastSample = time.Time{}
