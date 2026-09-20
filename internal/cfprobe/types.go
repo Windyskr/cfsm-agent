@@ -173,10 +173,12 @@ type NetBytes struct {
 }
 
 type NetworkInterfaceMetrics struct {
-	NetRX       string `json:"net_rx"`
-	NetTX       string `json:"net_tx"`
-	NetInSpeed  string `json:"net_in_speed"`
-	NetOutSpeed string `json:"net_out_speed"`
+	NetRX        string `json:"net_rx"`
+	NetTX        string `json:"net_tx"`
+	NetRXMonthly string `json:"net_rx_monthly"`
+	NetTXMonthly string `json:"net_tx_monthly"`
+	NetInSpeed   string `json:"net_in_speed"`
+	NetOutSpeed  string `json:"net_out_speed"`
 }
 
 type DiskDeviceRef struct {

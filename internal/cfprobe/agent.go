@@ -434,6 +434,7 @@ func (a *Agent) tick() {
 		a.refreshRealtimeBasicStats()
 	}
 	netInterfaces := map[string]NetBytes{}
+	monthlyInterfaces := map[string]NetBytes{}
 	if cfg.MultiInterface {
 		netInterfaces = readNetInterfaces(cfg.Interface)
 	}
@@ -456,10 +457,7 @@ func (a *Agent) tick() {
 	rxSpeed := uint64(float64(rxDelta) / dt)
 	txSpeed := uint64(float64(txDelta) / dt)
 	a.prevNet = netNow
-	interfaceMetrics := buildNetworkInterfaceMetrics(netInterfaces, a.prevNetInterfaces, dt)
-	if cfg.MultiInterface {
-		a.prevNetInterfaces = netInterfaces
-	}
+	previousNetInterfaces := a.prevNetInterfaces
 	a.prevTime = now
 
 	cpu := "0.00"
@@ -469,8 +467,15 @@ func (a *Agent) tick() {
 
 	if fullDue {
 		a.monthlyRX, a.monthlyTX = calcMonthlyTraffic(a.paths.TrafficFile, netNow, cfg.ResetDay, cfg.Interface)
+		if cfg.MultiInterface {
+			monthlyInterfaces = calcMonthlyTrafficByInterface(a.paths.TrafficFile, netInterfaces, cfg.ResetDay)
+		}
 		a.diskIO = a.sampleDiskIO(now)
 		a.fullAt = now
+	}
+	interfaceMetrics := buildNetworkInterfaceMetrics(netInterfaces, previousNetInterfaces, monthlyInterfaces, dt)
+	if cfg.MultiInterface {
+		a.prevNetInterfaces = netInterfaces
 	}
 	m := a.buildMetrics(cfg, cpu, netNow, rxSpeed, txSpeed, a.monthlyRX, a.monthlyTX, interfaceMetrics, a.diskIO)
 	if shouldSample {

@@ -126,7 +126,7 @@ func sumNetInterfaces(values map[string]NetBytes) NetBytes {
 	return total
 }
 
-func buildNetworkInterfaceMetrics(current, previous map[string]NetBytes, elapsedSeconds float64) map[string]NetworkInterfaceMetrics {
+func buildNetworkInterfaceMetrics(current, previous, monthly map[string]NetBytes, elapsedSeconds float64) map[string]NetworkInterfaceMetrics {
 	if len(current) == 0 {
 		return nil
 	}
@@ -148,10 +148,12 @@ func buildNetworkInterfaceMetrics(current, previous map[string]NetBytes, elapsed
 			txSpeed = uint64(float64(txDelta) / elapsedSeconds)
 		}
 		metrics[name] = NetworkInterfaceMetrics{
-			NetRX:       uintString(now.RX),
-			NetTX:       uintString(now.TX),
-			NetInSpeed:  uintString(rxSpeed),
-			NetOutSpeed: uintString(txSpeed),
+			NetRX:        uintString(now.RX),
+			NetTX:        uintString(now.TX),
+			NetRXMonthly: uintString(monthly[name].RX),
+			NetTXMonthly: uintString(monthly[name].TX),
+			NetInSpeed:   uintString(rxSpeed),
+			NetOutSpeed:  uintString(txSpeed),
 		}
 	}
 	return metrics

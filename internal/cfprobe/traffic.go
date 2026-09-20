@@ -5,8 +5,31 @@ import (
 	"os"
 	"path/filepath"
 	"strconv"
+	"strings"
 	"time"
 )
+
+func interfaceTrafficFile(basePath, name string) string {
+	clean := strings.Map(func(r rune) rune {
+		if (r >= 'a' && r <= 'z') || (r >= 'A' && r <= 'Z') || (r >= '0' && r <= '9') || r == '_' || r == '-' || r == '.' {
+			return r
+		}
+		return '_'
+	}, name)
+	return filepath.Join(filepath.Dir(basePath), "traffic-interface-"+clean+".dat")
+}
+
+func calcMonthlyTrafficByInterface(basePath string, current map[string]NetBytes, resetDay int) map[string]NetBytes {
+	if len(current) == 0 {
+		return nil
+	}
+	result := make(map[string]NetBytes, len(current))
+	for name, counters := range current {
+		rx, tx := calcMonthlyTraffic(interfaceTrafficFile(basePath, name), counters, resetDay, name)
+		result[name] = NetBytes{RX: rx, TX: tx}
+	}
+	return result
+}
 
 type trafficState struct {
 	RXPrev      uint64
