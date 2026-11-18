@@ -79,6 +79,8 @@ func parseInstallOptions(args []string) (InstallOptions, error) {
 	fs.StringVar(&opts.ConnectionMode, "connection-mode", connectionModeAuto, "")
 	fs.StringVar(&opts.PingMode, "ping_mode", pingModeTCP, "")
 	fs.StringVar(&opts.PingMode, "ping-mode", pingModeTCP, "")
+	fs.StringVar(&opts.IPLookup, "ip_lookup", ipLookupAuto, "")
+	fs.StringVar(&opts.IPLookup, "ip-lookup", ipLookupAuto, "")
 	fs.StringVar(&opts.UA, "ua", defaultUserAgent, "")
 	fs.StringVar(&autoUpdate, "auto_update", "", "")
 	fs.StringVar(&autoUpdate, "auto-update", "", "")
@@ -114,6 +116,10 @@ func parseInstallOptions(args []string) (InstallOptions, error) {
 		return opts, err
 	}
 	opts.PingMode, err = normalizePingMode(opts.PingMode)
+	if err != nil {
+		return opts, err
+	}
+	opts.IPLookup, err = normalizeIPLookup(opts.IPLookup)
 	if err != nil {
 		return opts, err
 	}
@@ -182,6 +188,7 @@ func printUsage(w io.Writer) {
 	fmt.Fprintln(w, "  -reset_day=N         流量重置日(1-31, 0=不重置)，默认1")
 	fmt.Fprintln(w, "  -connection_mode=MODE 连接模式 auto|http，默认auto")
 	fmt.Fprintln(w, "  -ping_mode=MODE      Ping 模式 tcp|icmp，默认tcp")
+	fmt.Fprintln(w, "  -ip_lookup=MODE      公网 IP 查询 auto|direct，默认auto；direct 不经上报域名查询")
 	fmt.Fprintln(w, "  -ua=UA               上报请求的 User-Agent，默认cfsm；服务端会按站点设置覆盖")
 	fmt.Fprintln(w, "  -auto_update=0|1     开启自动检查更新，默认0")
 	fmt.Fprintln(w, "  -install-ghproxy=URL 自动更新下载代理")

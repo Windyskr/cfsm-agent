@@ -22,6 +22,7 @@ func defaultConfig() Config {
 		ResetDay:        1,
 		ConnectionMode:  connectionModeAuto,
 		PingMode:        pingModeTCP,
+		IPLookup:        ipLookupAuto,
 		UA:              defaultUserAgent,
 		ConfigMD5:       "none",
 	}
@@ -63,6 +64,18 @@ func normalizePingMode(raw string) (string, error) {
 		return pingModeICMP, nil
 	default:
 		return "", fmt.Errorf("ping_mode 仅支持 tcp 或 icmp")
+	}
+}
+
+func normalizeIPLookup(raw string) (string, error) {
+	raw = strings.ToLower(strings.TrimSpace(raw))
+	switch raw {
+	case "", ipLookupAuto:
+		return ipLookupAuto, nil
+	case ipLookupDirect:
+		return ipLookupDirect, nil
+	default:
+		return "", fmt.Errorf("ip_lookup 仅支持 auto 或 direct")
 	}
 }
 
@@ -170,6 +183,7 @@ func readConfig(path string) (Config, error) {
 	cfg.UA = normalizeUserAgentValue(values["UA"])
 	cfg.AutoUpdate = values["AUTO_UPDATE"] == "1"
 	cfg.UpdateProxy = strings.TrimSpace(values["UPDATE_PROXY"])
+	cfg.IPLookup, _ = normalizeIPLookup(values["IP_LOOKUP"])
 	cfg.ConfigMD5 = values["CONFIG_MD5"]
 	if cfg.ConfigMD5 == "" {
 		cfg.ConfigMD5 = "none"
@@ -212,6 +226,7 @@ func writeConfig(path string, cfg Config) error {
 		writeKV("AUTO_UPDATE", "0")
 	}
 	writeKV("UPDATE_PROXY", cfg.UpdateProxy)
+	writeKV("IP_LOOKUP", cfg.IPLookup)
 	if cfg.ConfigMD5 == "" {
 		cfg.ConfigMD5 = "none"
 	}
@@ -249,6 +264,11 @@ func normalizeConfigIntervals(cfg *Config) {
 		cfg.PingMode = mode
 	} else {
 		cfg.PingMode = pingModeTCP
+	}
+	if mode, err := normalizeIPLookup(cfg.IPLookup); err == nil {
+		cfg.IPLookup = mode
+	} else {
+		cfg.IPLookup = ipLookupAuto
 	}
 	cfg.UA = normalizeUserAgentValue(cfg.UA)
 	cfg.UpdateProxy = strings.TrimSpace(cfg.UpdateProxy)

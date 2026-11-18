@@ -49,6 +49,15 @@ var (
 	ipv6BodyRE = regexp.MustCompile(`([0-9A-Fa-f]{1,4}:){7}[0-9A-Fa-f]{1,4}|([0-9A-Fa-f]{1,4}:){1,6}:([0-9A-Fa-f]{1,4}:){0,4}[0-9A-Fa-f]{0,4}`)
 )
 
+// ipLookupWorkerURL 返回查公网 IP 时使用的上报地址。direct 模式返回空串以跳过上报域名：
+// 上报连接走代理时，上报域名看到的是代理出口而不是本机 IP。
+func ipLookupWorkerURL(cfg Config) string {
+	if cfg.IPLookup == ipLookupDirect {
+		return ""
+	}
+	return cfg.WorkerURL
+}
+
 // lookupPublicIP 通过多个公共接口查询本机公网 IP。
 // network 为 "tcp4" 或 "tcp6"，锁定协议族避免取到错误版本的地址。
 // workerURL 非空时先用其 origin 下的 /cdn-cgi/trace 查一次，失败再回退到内置源。

@@ -60,6 +60,18 @@ func TestWorkerTraceURL(t *testing.T) {
 	}
 }
 
+func TestIPLookupWorkerURL(t *testing.T) {
+	cfg := defaultConfig()
+	cfg.WorkerURL = "https://worker.example.com/update"
+	if got := ipLookupWorkerURL(cfg); got != cfg.WorkerURL {
+		t.Fatalf("auto: ipLookupWorkerURL() = %q, want %q", got, cfg.WorkerURL)
+	}
+	cfg.IPLookup = ipLookupDirect
+	if got := ipLookupWorkerURL(cfg); got != "" {
+		t.Fatalf("direct: ipLookupWorkerURL() = %q, want empty (skip worker trace)", got)
+	}
+}
+
 func TestLookupViaWorker(t *testing.T) {
 	var gotUA, gotPath string
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {

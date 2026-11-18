@@ -19,6 +19,8 @@ const (
 	connectionModeHTTP       = "http"
 	pingModeTCP              = "tcp"
 	pingModeICMP             = "icmp"
+	ipLookupAuto             = "auto"
+	ipLookupDirect           = "direct"
 	defaultUserAgent         = "cfsm"
 	maxUserAgentLength       = 100
 )
@@ -47,8 +49,11 @@ type Config struct {
 	UA         string
 	AutoUpdate bool
 	UpdateProxy     string
+	// IPLookup 控制公网 IP 查询：auto 先查上报域名的 /cdn-cgi/trace，失败再用内置列表；
+	// direct 跳过上报域名只用内置列表，适合上报走代理、面板仍要显示本机出口 IP 的场景。
+	IPLookup string
 	// ConfigMD5 mirrors the worker dynamic config version; local fields like
-	// AutoUpdate and UpdateProxy are intentionally outside that comparison.
+	// AutoUpdate, UpdateProxy and IPLookup are intentionally outside that comparison.
 	ConfigMD5 string
 }
 

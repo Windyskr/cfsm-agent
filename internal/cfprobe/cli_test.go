@@ -121,6 +121,31 @@ func TestParseInstallOptionsPingMode(t *testing.T) {
 	}
 }
 
+func TestParseInstallOptionsIPLookup(t *testing.T) {
+	got, err := parseInstallOptions(nil)
+	if err != nil {
+		t.Fatalf("parseInstallOptions() error = %v", err)
+	}
+	if got.IPLookup != ipLookupAuto {
+		t.Fatalf("IPLookup = %q, want default %q", got.IPLookup, ipLookupAuto)
+	}
+
+	got, err = parseInstallOptions([]string{"--ip-lookup=direct"})
+	if err != nil {
+		t.Fatalf("parseInstallOptions(--ip-lookup=direct) error = %v", err)
+	}
+	if got.IPLookup != ipLookupDirect {
+		t.Fatalf("IPLookup = %q, want %q", got.IPLookup, ipLookupDirect)
+	}
+	if !got.Explicit["ip_lookup"] {
+		t.Fatalf("Explicit[ip_lookup] = false, want true (all: %v)", got.Explicit)
+	}
+
+	if _, err := parseInstallOptions([]string{"-ip_lookup=bad"}); err == nil {
+		t.Fatal("parseInstallOptions(-ip_lookup=bad) expected error")
+	}
+}
+
 func TestParseInstallOptionsTracksExplicitFlags(t *testing.T) {
 	got, err := parseInstallOptions([]string{"-auto_update=1", "--auto-update=1", "-collect=5", "-connection_mode=http", "-ping_mode=icmp", "--install-ghproxy=https://gh-proxy.example.com"})
 	if err != nil {

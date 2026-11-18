@@ -41,6 +41,7 @@ func TestConfigPersistsUpdateProxy(t *testing.T) {
 	cfg.UpdateProxy = "https://gh-proxy.example.com"
 	cfg.ConnectionMode = connectionModeHTTP
 	cfg.PingMode = pingModeICMP
+	cfg.IPLookup = ipLookupDirect
 
 	if err := writeConfig(path, cfg); err != nil {
 		t.Fatalf("writeConfig returned error: %v", err)
@@ -61,6 +62,21 @@ func TestConfigPersistsUpdateProxy(t *testing.T) {
 	if got.PingMode != pingModeICMP {
 		t.Fatalf("PingMode = %q, want %q", got.PingMode, pingModeICMP)
 	}
+	if got.IPLookup != ipLookupDirect {
+		t.Fatalf("IPLookup = %q, want %q", got.IPLookup, ipLookupDirect)
+	}
+}
+
+func TestNormalizeIPLookup(t *testing.T) {
+	for raw, want := range map[string]string{"": ipLookupAuto, "auto": ipLookupAuto, "direct": ipLookupDirect, " DIRECT ": ipLookupDirect} {
+		got, err := normalizeIPLookup(raw)
+		if err != nil || got != want {
+			t.Fatalf("normalizeIPLookup(%q) = %q, %v; want %q", raw, got, err, want)
+		}
+	}
+	if _, err := normalizeIPLookup("proxy"); err == nil {
+		t.Fatal("normalizeIPLookup(proxy) expected error")
+	}
 }
 
 func TestReadConfigDefaultsConnectionModeAuto(t *testing.T) {
@@ -78,6 +94,9 @@ func TestReadConfigDefaultsConnectionModeAuto(t *testing.T) {
 	}
 	if got.PingMode != pingModeTCP {
 		t.Fatalf("PingMode = %q, want %q", got.PingMode, pingModeTCP)
+	}
+	if got.IPLookup != ipLookupAuto {
+		t.Fatalf("IPLookup = %q, want %q", got.IPLookup, ipLookupAuto)
 	}
 	if got.UA != defaultUserAgent {
 		t.Fatalf("UA = %q, want default %q", got.UA, defaultUserAgent)

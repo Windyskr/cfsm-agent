@@ -62,6 +62,7 @@ func TestMergeExplicitInstallConfig(t *testing.T) {
 		ResetDay:       5,
 		ConnectionMode: connectionModeAuto,
 		PingMode:       pingModeTCP,
+		IPLookup:       ipLookupAuto,
 		AutoUpdate:     false,
 	}
 	flagConfig := Config{
@@ -69,6 +70,7 @@ func TestMergeExplicitInstallConfig(t *testing.T) {
 		ResetDay:       1,
 		ConnectionMode: connectionModeHTTP,
 		PingMode:       pingModeICMP,
+		IPLookup:       ipLookupDirect,
 		AutoUpdate:     true,
 		UpdateProxy:    "https://gh-proxy.example.com",
 	}
@@ -89,6 +91,15 @@ func TestMergeExplicitInstallConfig(t *testing.T) {
 	}
 	if merged.PingMode != pingModeTCP {
 		t.Fatalf("PingMode = %q, want preserved %q", merged.PingMode, pingModeTCP)
+	}
+	if merged.IPLookup != ipLookupAuto {
+		t.Fatalf("IPLookup = %q, want preserved %q", merged.IPLookup, ipLookupAuto)
+	}
+
+	merged = existing
+	mergeExplicitInstallConfig(&merged, flagConfig, map[string]bool{"ip_lookup": true})
+	if merged.IPLookup != ipLookupDirect {
+		t.Fatalf("IPLookup = %q, want %q", merged.IPLookup, ipLookupDirect)
 	}
 
 	merged = existing

@@ -247,8 +247,8 @@ func Run(configFile string, debug bool, version string) error {
 	a.basicAt = time.Now()
 
 	a.log.info("CF-Server-Monitor Go Probe started version=%s platform=%s config=%s", version, platformName(), paths.ConfigFile)
-	a.log.debugf("config id=%s url=%s report_interval=%ds collect_interval=%ds reset_day=%d connection_mode=%s ping_mode=%s interface=%s auto_update=%v",
-		cfg.ServerID, cfg.WorkerURL, cfg.ReportInterval, cfg.CollectInterval, cfg.ResetDay, cfg.ConnectionMode, cfg.PingMode, firstNonEmpty(cfg.Interface, "auto"), cfg.AutoUpdate)
+	a.log.debugf("config id=%s url=%s report_interval=%ds collect_interval=%ds reset_day=%d connection_mode=%s ping_mode=%s ip_lookup=%s interface=%s auto_update=%v",
+		cfg.ServerID, cfg.WorkerURL, cfg.ReportInterval, cfg.CollectInterval, cfg.ResetDay, cfg.ConnectionMode, cfg.PingMode, cfg.IPLookup, firstNonEmpty(cfg.Interface, "auto"), cfg.AutoUpdate)
 
 	go a.networkWorker(ctx)
 	if a.usesWSS() {
@@ -1165,8 +1165,9 @@ func (a *Agent) networkWorker(ctx context.Context) {
 			snap := ProbeSnapshot{}
 			needUpdate := false
 			if lastIP.IsZero() || now.Sub(lastIP) >= 10*time.Minute {
-				snap.IPv4 = lookupPublicIP("tcp4", a.log, cfg.WorkerURL)
-				snap.IPv6 = lookupPublicIP("tcp6", a.log, cfg.WorkerURL)
+				lookupWorkerURL := ipLookupWorkerURL(cfg)
+				snap.IPv4 = lookupPublicIP("tcp4", a.log, lookupWorkerURL)
+				snap.IPv6 = lookupPublicIP("tcp6", a.log, lookupWorkerURL)
 				lastIP = now
 				needUpdate = true
 			}

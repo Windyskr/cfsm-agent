@@ -100,6 +100,7 @@ curl -fsSL https://raw.githubusercontent.com/huilang-me/cfsm-agent/main/install.
 | `-reset_day=N` | 每月流量重置日，`1-31`；`0` 表示不重置 | `1` |
 | `-connection_mode=auto\|http` | 连接模式；`auto` 优先 WSS 实时上报并在不可用时 POST 兜底，`http` 仅按上报间隔 POST | `auto` |
 | `-ping_mode=tcp\|icmp` | Ping 探测模式；`tcp` 使用 TCP 连接探测，`icmp` 使用 ICMP 探测；两者均每 20 秒采样一次并按 2 分钟窗口聚合 | `tcp` |
+| `-ip_lookup=auto\|direct` | 公网 IP 查询方式；`auto` 先查上报域名的 `/cdn-cgi/trace`，失败再用内置查询源；`direct` 跳过上报域名只用内置查询源，适合上报走代理但面板要显示本机出口 IP 的场景。对应配置文件 `IP_LOOKUP` | `auto` |
 | `-ua=UA` | 上报请求使用的 User-Agent；仅允许字母、数字、空格与 `. _ - / , : ; ( ) + = @ # * ? ~`，≤100 字符。服务端可通过 `X-Ua`（HTTP）或 WSS ack 的 `ua` 字段覆盖，以面板设置为准 | `cfsm` |
 | `-auto_update=0\|1` | 是否开启自动检查更新 | `0` |
 | `-rx_correction=N` | 下行流量校正，单位 GB | 空 |
