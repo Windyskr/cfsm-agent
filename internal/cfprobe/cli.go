@@ -77,6 +77,8 @@ func parseInstallOptions(args []string) (InstallOptions, error) {
 	fs.StringVar(&multiInterface, "multi_interface", "", "")
 	fs.StringVar(&multiInterface, "multi-interface", "", "")
 	fs.IntVar(&opts.ResetDay, "reset_day", 1, "")
+	fs.StringVar(&opts.ResetTime, "reset_time", "", "")
+	fs.StringVar(&opts.ResetUTCOffset, "reset_utc_offset", "", "")
 	fs.StringVar(&opts.ConnectionMode, "connection_mode", connectionModeAuto, "")
 	fs.StringVar(&opts.ConnectionMode, "connection-mode", connectionModeAuto, "")
 	fs.StringVar(&opts.PingMode, "ping_mode", pingModeTCP, "")
@@ -121,6 +123,14 @@ func parseInstallOptions(args []string) (InstallOptions, error) {
 		return opts, err
 	}
 	opts.PingMode, err = normalizePingMode(opts.PingMode)
+	if err != nil {
+		return opts, err
+	}
+	opts.ResetTime, err = normalizeResetTime(opts.ResetTime)
+	if err != nil {
+		return opts, err
+	}
+	opts.ResetUTCOffset, err = normalizeResetUTCOffset(opts.ResetUTCOffset)
 	if err != nil {
 		return opts, err
 	}
@@ -185,6 +195,8 @@ func printUsage(w io.Writer) {
 	fmt.Fprintln(w, "  -interface=IFACES    指定网卡，多个用英文逗号分隔")
 	fmt.Fprintln(w, "  -multi_interface=0|1 上报逐网卡累计流量和实时速度，默认0")
 	fmt.Fprintln(w, "  -reset_day=N         流量重置日(1-31, 0=不重置)，默认1")
+	fmt.Fprintln(w, "  -reset_time=HH:MM    流量重置时间，默认00:00")
+	fmt.Fprintln(w, "  -reset_utc_offset=N  重置日/时间所在时区(相对UTC的分钟数，如480)，默认本机时区")
 	fmt.Fprintln(w, "  -connection_mode=MODE 连接模式 auto|http，默认auto")
 	fmt.Fprintln(w, "  -ping_mode=MODE      Ping 模式 tcp|icmp，默认tcp")
 	fmt.Fprintln(w, "  -auto_update=0|1     开启自动检查更新，默认0")

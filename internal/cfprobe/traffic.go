@@ -19,13 +19,43 @@ func interfaceTrafficFile(basePath, name string) string {
 	return filepath.Join(filepath.Dir(basePath), "traffic-interface-"+clean+".dat")
 }
 
-func calcMonthlyTrafficByInterface(basePath string, current map[string]NetBytes, resetDay int) map[string]NetBytes {
+// resetSchedule is when the traffic period restarts: on Day (1-31, 0 = never)
+// at Minute minutes past midnight in Location (nil = the agent's local zone).
+type resetSchedule struct {
+	Day      int
+	Minute   int
+	Location *time.Location
+}
+
+func (cfg Config) trafficResetSchedule() resetSchedule {
+	schedule := resetSchedule{Day: cfg.ResetDay}
+	if minute, ok := parseResetTime(cfg.ResetTime); ok {
+		schedule.Minute = minute
+	}
+	if offset, ok := parseResetUTCOffset(cfg.ResetUTCOffset); ok {
+		sign, abs := '+', offset
+		if offset < 0 {
+			sign, abs = '-', -offset
+		}
+		schedule.Location = time.FixedZone(fmt.Sprintf("UTC%c%02d:%02d", sign, abs/60, abs%60), offset*60)
+	}
+	return schedule
+}
+
+func (s resetSchedule) zoneName() string {
+	if s.Location == nil {
+		return "本机时区"
+	}
+	return s.Location.String()
+}
+
+func calcMonthlyTrafficByInterface(basePath string, current map[string]NetBytes, schedule resetSchedule) map[string]NetBytes {
 	if len(current) == 0 {
 		return nil
 	}
 	result := make(map[string]NetBytes, len(current))
 	for name, counters := range current {
-		rx, tx := calcMonthlyTraffic(interfaceTrafficFile(basePath, name), counters, resetDay, name)
+		rx, tx := calcMonthlyTraffic(interfaceTrafficFile(basePath, name), counters, schedule, name)
 		result[name] = NetBytes{RX: rx, TX: tx}
 	}
 	return result
@@ -70,14 +100,14 @@ func writeTrafficState(path string, st trafficState) error {
 	return os.Rename(tmp, path)
 }
 
-func calcMonthlyTraffic(path string, current NetBytes, resetDay int, iface string) (uint64, uint64) {
+func calcMonthlyTraffic(path string, current NetBytes, schedule resetSchedule, iface string) (uint64, uint64) {
 	nowTime := time.Now()
 	now := nowTime.Unix()
 	st := readTrafficState(path)
 	if st.Interface != iface {
 		st = trafficState{}
 	}
-	periodStart := periodStartTS(nowTime, resetDay)
+	periodStart := periodStartTS(nowTime, schedule)
 	if st.LastCheck == 0 {
 		st.RXPrev = current.RX
 		st.TXPrev = current.TX
@@ -95,7 +125,11 @@ func calcMonthlyTraffic(path string, current NetBytes, resetDay int, iface strin
 	if current.TX >= st.TXPrev {
 		txDelta = current.TX - st.TXPrev
 	}
-	if periodStart != 0 && st.PeriodStart != 0 && periodStart != st.PeriodStart {
+	// Start a new period only when a reset moment passed since the last
+	// sample. If just the schedule changed (reset day or time edited mid-period),
+	// the stored start moves and the traffic counted so far is kept.
+	if periodStart != 0 && st.PeriodStart != 0 && periodStart != st.PeriodStart &&
+		periodStartTS(time.Unix(st.LastCheck, 0), schedule) != periodStart {
 		st.RXPeriod = rxDelta
 		st.TXPeriod = txDelta
 	} else {
@@ -130,20 +164,23 @@ func applyTrafficCorrection(path string, current NetBytes, iface string, rxGB, t
 	return writeTrafficState(path, st)
 }
 
-func periodStartTS(now time.Time, resetDay int) int64 {
-	if resetDay == 0 {
+func periodStartTS(now time.Time, schedule resetSchedule) int64 {
+	if schedule.Day == 0 {
 		return 0
 	}
-	if resetDay < 1 || resetDay > 31 {
+	if schedule.Day < 1 || schedule.Day > 31 {
 		return now.Unix()
 	}
-	return lastResetDate(now, resetDay).Unix()
+	if schedule.Location != nil {
+		now = now.In(schedule.Location)
+	}
+	return lastResetDate(now, schedule.Day, schedule.Minute).Unix()
 }
 
-func lastResetDate(now time.Time, resetDay int) time.Time {
+func lastResetDate(now time.Time, resetDay, resetMinute int) time.Time {
 	year, month, _ := now.Date()
 	loc := now.Location()
-	thisMonth := actualResetDate(year, month, resetDay, loc)
+	thisMonth := actualResetDate(year, month, resetDay, resetMinute, loc)
 	if !now.Before(thisMonth) {
 		return thisMonth
 	}
@@ -153,14 +190,14 @@ func lastResetDate(now time.Time, resetDay int) time.Time {
 		prevMonth = time.December
 		prevYear--
 	}
-	return actualResetDate(prevYear, prevMonth, resetDay, loc)
+	return actualResetDate(prevYear, prevMonth, resetDay, resetMinute, loc)
 }
 
-func actualResetDate(year int, month time.Month, resetDay int, loc *time.Location) time.Time {
+func actualResetDate(year int, month time.Month, resetDay, resetMinute int, loc *time.Location) time.Time {
 	firstDayOfNextMonth := time.Date(year, month+1, 1, 0, 0, 0, 0, loc)
 	lastDayOfMonth := firstDayOfNextMonth.AddDate(0, 0, -1).Day()
 	if resetDay <= lastDayOfMonth {
-		return time.Date(year, month, resetDay, 0, 0, 0, 0, loc)
+		return time.Date(year, month, resetDay, 0, resetMinute, 0, 0, loc)
 	}
 	nextMonth := month + 1
 	nextYear := year
@@ -168,7 +205,7 @@ func actualResetDate(year int, month time.Month, resetDay int, loc *time.Locatio
 		nextMonth = time.January
 		nextYear++
 	}
-	return time.Date(nextYear, nextMonth, 1, 0, 0, 0, 0, loc)
+	return time.Date(nextYear, nextMonth, 1, 0, resetMinute, 0, 0, loc)
 }
 
 func parseUintDefault(raw string, def uint64) uint64 {

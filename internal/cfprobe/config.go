@@ -65,6 +65,58 @@ func normalizePingMode(raw string) (string, error) {
 	}
 }
 
+// normalizeResetTime accepts "" (midnight) or H:MM / HH:MM and returns "" or HH:MM.
+func normalizeResetTime(raw string) (string, error) {
+	raw = strings.TrimSpace(raw)
+	if raw == "" {
+		return "", nil
+	}
+	minute, ok := parseResetTime(raw)
+	if !ok {
+		return "", fmt.Errorf("reset_time 需为 HH:MM")
+	}
+	return fmt.Sprintf("%02d:%02d", minute/60, minute%60), nil
+}
+
+// parseResetTime returns the minutes after midnight of an H:MM / HH:MM time.
+func parseResetTime(raw string) (int, bool) {
+	hourText, minuteText, found := strings.Cut(strings.TrimSpace(raw), ":")
+	if !found || len(hourText) < 1 || len(hourText) > 2 || len(minuteText) != 2 {
+		return 0, false
+	}
+	hour, err := strconv.Atoi(hourText)
+	if err != nil || hour < 0 || hour > 23 {
+		return 0, false
+	}
+	minute, err := strconv.Atoi(minuteText)
+	if err != nil || minute < 0 || minute > 59 {
+		return 0, false
+	}
+	return hour*60 + minute, true
+}
+
+// normalizeResetUTCOffset accepts "" (the agent's local time zone) or an
+// offset in minutes east of UTC.
+func normalizeResetUTCOffset(raw string) (string, error) {
+	raw = strings.TrimSpace(raw)
+	if raw == "" {
+		return "", nil
+	}
+	offset, ok := parseResetUTCOffset(raw)
+	if !ok {
+		return "", fmt.Errorf("reset_utc_offset 需为 -720 到 840 之间的分钟数")
+	}
+	return strconv.Itoa(offset), nil
+}
+
+func parseResetUTCOffset(raw string) (int, bool) {
+	offset, err := strconv.Atoi(strings.TrimSpace(raw))
+	if err != nil || offset < -720 || offset > 840 {
+		return 0, false
+	}
+	return offset, true
+}
+
 func normalizeInterfaceList(raw string) (string, error) {
 	parts := strings.Split(raw, ",")
 	seen := map[string]bool{}
@@ -138,6 +190,8 @@ func readConfig(path string) (Config, error) {
 	cfg.Interface, _ = normalizeInterfaceList(values["INTERFACE"])
 	cfg.MultiInterface, _ = normalizeBinaryValue(values["MULTI_INTERFACE"], cfg.MultiInterface)
 	cfg.ResetDay = parseIntDefault(values["RESET_DAY"], cfg.ResetDay)
+	cfg.ResetTime = values["RESET_TIME"]
+	cfg.ResetUTCOffset = values["RESET_UTC_OFFSET"]
 	cfg.ConnectionMode, _ = normalizeConnectionMode(values["CONNECTION_MODE"])
 	cfg.PingMode, _ = normalizePingMode(values["PING_MODE"])
 	cfg.AutoUpdate = values["AUTO_UPDATE"] == "1"
@@ -179,6 +233,8 @@ func writeConfig(path string, cfg Config) error {
 		writeKV("MULTI_INTERFACE", "0")
 	}
 	writeKV("RESET_DAY", strconv.Itoa(cfg.ResetDay))
+	writeKV("RESET_TIME", cfg.ResetTime)
+	writeKV("RESET_UTC_OFFSET", cfg.ResetUTCOffset)
 	writeKV("CONNECTION_MODE", cfg.ConnectionMode)
 	writeKV("PING_MODE", cfg.PingMode)
 	if cfg.AutoUpdate {
@@ -211,6 +267,16 @@ func normalizeConfigIntervals(cfg *Config) {
 	}
 	if cfg.ResetDay < 0 || cfg.ResetDay > 31 {
 		cfg.ResetDay = 1
+	}
+	if value, err := normalizeResetTime(cfg.ResetTime); err == nil {
+		cfg.ResetTime = value
+	} else {
+		cfg.ResetTime = ""
+	}
+	if value, err := normalizeResetUTCOffset(cfg.ResetUTCOffset); err == nil {
+		cfg.ResetUTCOffset = value
+	} else {
+		cfg.ResetUTCOffset = ""
 	}
 	if cfg.ConfigMD5 == "" {
 		cfg.ConfigMD5 = "none"

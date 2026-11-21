@@ -7,7 +7,7 @@ const (
 	legacyAgentVersion          = "1.0.0"
 	maxTrafficCorrectionGB      = 1000000
 	autoUpdateDelay             = 60 * time.Second
-	configSchemaVersion         = "7"
+	configSchemaVersion         = "8"
 	defaultReportIntervalSec    = 60
 	defaultWSSReportIntervalSec = 2
 	minWSSReportIntervalSec     = 1
@@ -35,10 +35,14 @@ type Config struct {
 	Interface       string
 	MultiInterface  bool
 	ResetDay        int
-	ConnectionMode  string
-	PingMode        string
-	AutoUpdate      bool
-	UpdateProxy     string
+	// ResetTime is "HH:MM" or "" for midnight. ResetUTCOffset is the time zone
+	// of ResetDay/ResetTime in minutes east of UTC, or "" for the local zone.
+	ResetTime      string
+	ResetUTCOffset string
+	ConnectionMode string
+	PingMode       string
+	AutoUpdate     bool
+	UpdateProxy    string
 	// ConfigMD5 mirrors the worker dynamic config version; local fields like
 	// AutoUpdate and UpdateProxy are intentionally outside that comparison.
 	ConfigMD5 string

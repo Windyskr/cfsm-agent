@@ -194,8 +194,8 @@ func Run(configFile string, debug bool, version string) error {
 	a.basicAt = time.Now()
 
 	a.log.info("CF-Server-Monitor Go Probe started version=%s platform=%s config=%s", version, platformName(), paths.ConfigFile)
-	a.log.debugf("config id=%s url=%s report_interval=%ds collect_interval=%ds reset_day=%d connection_mode=%s ping_mode=%s interface=%s multi_interface=%v auto_update=%v",
-		cfg.ServerID, cfg.WorkerURL, cfg.ReportInterval, cfg.CollectInterval, cfg.ResetDay, cfg.ConnectionMode, cfg.PingMode, firstNonEmpty(cfg.Interface, "auto"), cfg.MultiInterface, cfg.AutoUpdate)
+	a.log.debugf("config id=%s url=%s report_interval=%ds collect_interval=%ds reset_day=%d reset_time=%s reset_utc_offset=%s connection_mode=%s ping_mode=%s interface=%s multi_interface=%v auto_update=%v",
+		cfg.ServerID, cfg.WorkerURL, cfg.ReportInterval, cfg.CollectInterval, cfg.ResetDay, firstNonEmpty(cfg.ResetTime, "00:00"), firstNonEmpty(cfg.ResetUTCOffset, "local"), cfg.ConnectionMode, cfg.PingMode, firstNonEmpty(cfg.Interface, "auto"), cfg.MultiInterface, cfg.AutoUpdate)
 
 	go a.networkWorker(ctx)
 	if a.usesWSS() {
@@ -466,9 +466,10 @@ func (a *Agent) tick() {
 	}
 
 	if fullDue {
-		a.monthlyRX, a.monthlyTX = calcMonthlyTraffic(a.paths.TrafficFile, netNow, cfg.ResetDay, cfg.Interface)
+		resetSchedule := cfg.trafficResetSchedule()
+		a.monthlyRX, a.monthlyTX = calcMonthlyTraffic(a.paths.TrafficFile, netNow, resetSchedule, cfg.Interface)
 		if cfg.MultiInterface {
-			a.monthlyInterfaces = calcMonthlyTrafficByInterface(a.paths.TrafficFile, netInterfaces, cfg.ResetDay)
+			a.monthlyInterfaces = calcMonthlyTrafficByInterface(a.paths.TrafficFile, netInterfaces, resetSchedule)
 		}
 		a.diskIO = a.sampleDiskIO(now)
 		a.fullAt = now
@@ -927,6 +928,8 @@ func (a *Agent) applyRemoteConfigWithOptions(body []byte, headers http.Header, a
 		"report_interval":     true,
 		"wss_report_interval": true,
 		"reset_day":           true,
+		"reset_time":          true,
+		"reset_utc_offset":    true,
 		"schema_version":      true,
 		"custom_ct":           true,
 		"custom_cu":           true,
@@ -1017,6 +1020,14 @@ func (a *Agent) applyRemoteConfigWithOptions(body []byte, headers http.Header, a
 	if err != nil {
 		return fmt.Errorf("invalid multi_interface: %w", err)
 	}
+	resetTime, err := normalizeResetTime(values.Get("reset_time"))
+	if err != nil {
+		return err
+	}
+	resetUTCOffset, err := normalizeResetUTCOffset(values.Get("reset_utc_offset"))
+	if err != nil {
+		return err
+	}
 	effectiveCollect := collect
 	if connectionMode == connectionModeAuto && (collect == 0 || collect > wssReport) {
 		effectiveCollect = wssReport
@@ -1025,13 +1036,16 @@ func (a *Agent) applyRemoteConfigWithOptions(body []byte, headers http.Header, a
 	if hasRemoteMD5 {
 		shouldApply = newMD5 != cfg.ConfigMD5
 	} else {
-		shouldApply = remoteConfigDiffers(cfg, values, effectiveCollect, report, reset, iface, multiInterface, connectionMode, pingMode)
+		shouldApply = remoteConfigDiffers(cfg, values, effectiveCollect, report, reset, iface, multiInterface, connectionMode, pingMode) ||
+			cfg.ResetTime != resetTime || cfg.ResetUTCOffset != resetUTCOffset
 	}
 	if shouldApply {
 		nextCfg := cfg
 		nextCfg.CollectInterval = effectiveCollect
 		nextCfg.ReportInterval = report
 		nextCfg.ResetDay = reset
+		nextCfg.ResetTime = resetTime
+		nextCfg.ResetUTCOffset = resetUTCOffset
 		nextCfg.CTNode = values.Get("custom_ct")
 		nextCfg.CUNode = values.Get("custom_cu")
 		nextCfg.CMNode = values.Get("custom_cm")

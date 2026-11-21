@@ -129,6 +129,10 @@ func mergeExplicitInstallConfig(dst *Config, src Config, explicit map[string]boo
 			dst.MultiInterface = src.MultiInterface
 		case "reset_day":
 			dst.ResetDay = src.ResetDay
+		case "reset_time":
+			dst.ResetTime = src.ResetTime
+		case "reset_utc_offset":
+			dst.ResetUTCOffset = src.ResetUTCOffset
 		case "connection_mode":
 			dst.ConnectionMode = src.ConnectionMode
 		case "ping_mode":
@@ -294,7 +298,7 @@ func printInstallSummary(paths Paths, opts InstallOptions) {
 	if opts.ResetDay == 0 {
 		fmt.Println("  Reset Day   : 不重置")
 	} else {
-		fmt.Printf("  Reset Day   : %d号\n", opts.ResetDay)
+		fmt.Printf("  Reset Day   : %d号 %s (%s)\n", opts.ResetDay, firstNonEmpty(opts.ResetTime, "00:00"), opts.trafficResetSchedule().zoneName())
 	}
 	printProbeNodes(opts)
 	printManagementCommands(paths)
